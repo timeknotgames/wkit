@@ -22,6 +22,8 @@ Part of the [TEK8 Learning Lotus](https://tek8.org) educational framework and th
 
 Mount Tahoma (Mount Rainier), known as the Mother of Waters, stands at the center of this world at Minecraft coordinates (0, 0). All geography is positioned at its true relative distance and direction from the mountain.
 
+**[Read our Land Acknowledgement & Indigenous Data Sovereignty Statement](LAND_ACKNOWLEDGEMENT.md)** — This project operates on the ancestral lands of the Puyallup, Nisqually, Muckleshoot, and Coast Salish peoples. We are guided by OCAP and CARE principles for Indigenous data sovereignty.
+
 ## Credits & Acknowledgments
 
 - **[Arnis](https://github.com/louis-e/arnis)** (Apache 2.0) — The original inspiration. Arnis generates Minecraft worlds from OSM data as a standalone Rust application. WKit extends this concept into a live Paper `ChunkGenerator` that renders terrain on-demand as players explore. Arnis's approach to OSM element processing, elevation handling, and block mapping informed WKit's design throughout.
