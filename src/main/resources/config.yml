@@ -1,0 +1,18 @@
+arnis:
+  binary-path: "/home/zufaydi/mc/arnis-main/target/release/arnis"
+  temp-directory: "/tmp/wkit-gen"
+  default-scale: 1.0
+  default-ground-level: -62
+  default-terrain: true
+  generation-timeout-seconds: 600
+
+sector:
+  world-name: "world"
+  max-sector-width: 5000
+  max-concurrent-generations: 1
+
+# Mount Tahoma (Mother of Waters) - world origin
+projection:
+  origin-lat: 46.8523
+  origin-lng: -121.7603
+  scale: 1.0

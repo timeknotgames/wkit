@@ -1,0 +1,39 @@
+name: WKit
+version: '${version}'
+main: fun.eightxm.wkit.WKitPlugin
+api-version: '1.21'
+description: Worlding Kit - Arnis sector management and geographic tools
+author: 8xm
+website: https://8xm.fun
+softdepend: [FastAsyncWorldEdit]
+commands:
+  sector:
+    description: Manage Arnis-generated world sectors
+    usage: /sector <generate|list|tp|info|here> [args]
+    permission: wkit.sector
+  wkit:
+    description: Worlding Kit tools and admin commands
+    usage: /wkit <status|coords|measure|identify|reload> [args]
+    permission: wkit.use
+permissions:
+  wkit.sector:
+    description: Base sector command access
+    default: true
+  wkit.sector.generate:
+    description: Generate new sectors
+    default: op
+  wkit.sector.list:
+    description: List sectors
+    default: true
+  wkit.sector.teleport:
+    description: Teleport to sectors
+    default: true
+  wkit.sector.info:
+    description: View sector info
+    default: true
+  wkit.use:
+    description: Use worlding kit tools
+    default: true
+  wkit.admin:
+    description: Admin commands
+    default: op
