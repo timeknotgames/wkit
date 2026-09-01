@@ -116,7 +116,7 @@ public class ArnisChunkGenerator extends ChunkGenerator {
                 } else if (feature == OSMCache.OSMElement.Type.BUILDING) {
                     // Building footprint — stone base + walls
                     chunkData.setBlock(x, surfaceY, z, Material.SMOOTH_STONE);
-                    int buildingHeight = getBuildingHeight(featureSubtype[x][z]);
+                    int buildingHeight = getBuildingHeight(featureSubtype[x][z], random);
                     for (int y = surfaceY + 1; y <= surfaceY + buildingHeight; y++) {
                         // Walls on edges, air inside (simplified — full wall)
                         chunkData.setBlock(x, y, z, Material.STONE_BRICKS);
@@ -326,17 +326,17 @@ public class ArnisChunkGenerator extends ChunkGenerator {
         return inside;
     }
 
-    private int getBuildingHeight(String subtype) {
+    private int getBuildingHeight(String subtype, Random random) {
         if (subtype == null) return 4;
         return switch (subtype) {
             case "yes", "residential", "house" -> 4;
-            case "apartments" -> 8 + (int)(Math.random() * 8);
-            case "commercial", "office" -> 6 + (int)(Math.random() * 10);
+            case "apartments" -> 8 + random.nextInt(8);
+            case "commercial", "office" -> 6 + random.nextInt(10);
             case "industrial", "warehouse" -> 5;
             case "church", "cathedral" -> 12;
             case "school", "university" -> 4;
             case "hospital" -> 6;
-            case "skyscraper" -> 20 + (int)(Math.random() * 30);
+            case "skyscraper" -> 20 + random.nextInt(30);
             default -> 4;
         };
     }

@@ -22,20 +22,26 @@ public class ElevationCache {
 
     private static final String TILE_URL_TEMPLATE =
         "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/%d/%d/%d.png";
-    private static final int ZOOM = 12; // zoom 12 gives ~38m/pixel — good for 1:1 scale
-    private static final int TILE_SIZE = 256;
+    static final int ZOOM = 12; // zoom 12 gives ~38m/pixel — good for 1:1 scale
+    static final int TILE_SIZE = 256;
 
     private final Path cacheDir;
     private final Logger logger;
     private final GeoProjection projection;
+    private final TileFetcher tileFetcher;
 
     // Cache decoded tile elevation grids in memory
     private final ConcurrentHashMap<String, float[][]> tileCache = new ConcurrentHashMap<>();
 
     public ElevationCache(Path cacheDir, GeoProjection projection, Logger logger) {
+        this(cacheDir, projection, logger, null);
+    }
+
+    public ElevationCache(Path cacheDir, GeoProjection projection, Logger logger, TileFetcher tileFetcher) {
         this.cacheDir = cacheDir;
         this.projection = projection;
         this.logger = logger;
+        this.tileFetcher = tileFetcher;
         try { Files.createDirectories(cacheDir); } catch (IOException ignored) {}
     }
 
@@ -49,8 +55,9 @@ public class ElevationCache {
         int tileY = latToTileY(lat, ZOOM);
         String key = ZOOM + "/" + tileX + "/" + tileY;
 
-        // Get or fetch tile
-        float[][] grid = tileCache.computeIfAbsent(key, k -> loadTile(tileX, tileY));
+        // Get or fetch tile (use injected TileFetcher if available, else default HTTP)
+        float[][] grid = tileCache.computeIfAbsent(key, k ->
+            tileFetcher != null ? tileFetcher.fetchTile(tileX, tileY) : loadTile(tileX, tileY));
         if (grid == null) return 0;
 
         // Get pixel position within tile
@@ -151,17 +158,17 @@ public class ElevationCache {
         }
     }
 
-    // Slippy map tile math
-    private static int lonToTileX(double lng, int zoom) {
+    // Slippy map tile math (package-private for testing)
+    static int lonToTileX(double lng, int zoom) {
         return (int) Math.floor(lonToTileXFrac(lng, zoom));
     }
-    private static int latToTileY(double lat, int zoom) {
+    static int latToTileY(double lat, int zoom) {
         return (int) Math.floor(latToTileYFrac(lat, zoom));
     }
-    private static double lonToTileXFrac(double lng, int zoom) {
+    static double lonToTileXFrac(double lng, int zoom) {
         return (lng + 180.0) / 360.0 * (1 << zoom);
     }
-    private static double latToTileYFrac(double lat, int zoom) {
+    static double latToTileYFrac(double lat, int zoom) {
         double latRad = Math.toRadians(lat);
         return (1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2 * (1 << zoom);
     }

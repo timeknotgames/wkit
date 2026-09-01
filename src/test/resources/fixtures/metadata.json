@@ -1,0 +1,10 @@
+{
+    "minMcX": -256,
+    "maxMcX": 512,
+    "minMcZ": -128,
+    "maxMcZ": 384,
+    "minGeoLat": 47.252,
+    "maxGeoLat": 47.258,
+    "minGeoLon": -122.450,
+    "maxGeoLon": -122.438
+}

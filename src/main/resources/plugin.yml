@@ -1,5 +1,5 @@
 name: WKit
-version: '${version}'
+version: '1.0.0'
 main: fun.eightxm.wkit.WKitPlugin
 api-version: '1.21'
 description: Worlding Kit - Arnis sector management and geographic tools

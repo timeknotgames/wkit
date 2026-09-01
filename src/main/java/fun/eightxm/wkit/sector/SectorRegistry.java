@@ -6,6 +6,9 @@ import com.google.gson.reflect.TypeToken;
 
 import java.io.*;
 import java.lang.reflect.Type;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -38,10 +41,24 @@ public class SectorRegistry {
 
     public void save() {
         dataFile.getParentFile().mkdirs();
-        try (Writer writer = new FileWriter(dataFile)) {
+        // Atomic write: write to temp file, then rename to prevent corruption on crash
+        File tmpFile = new File(dataFile.getParentFile(), dataFile.getName() + ".tmp");
+        try (Writer writer = new FileWriter(tmpFile)) {
             gson.toJson(new ArrayList<>(sectors.values()), writer);
         } catch (IOException e) {
             e.printStackTrace();
+            return;
+        }
+        try {
+            Files.move(tmpFile.toPath(), dataFile.toPath(), StandardCopyOption.REPLACE_EXISTING,
+                StandardCopyOption.ATOMIC_MOVE);
+        } catch (IOException e) {
+            // ATOMIC_MOVE may not be supported on all filesystems — fall back to plain replace
+            try {
+                Files.move(tmpFile.toPath(), dataFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+            } catch (IOException e2) {
+                e2.printStackTrace();
+            }
         }
     }
 

@@ -12,6 +12,9 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
 
 /**
@@ -28,11 +31,13 @@ public class OSMCache {
     };
 
     // Cache tile size in degrees (~500m at mid-latitudes)
-    private static final double TILE_SIZE_DEG = 0.005;
+    static final double TILE_SIZE_DEG = 0.005;
 
     private final Path cacheDir;
     private final Logger logger;
     private final Gson gson = new Gson();
+    private final OverpassFetcher overpassFetcher;
+    private final ExecutorService fetchExecutor;
 
     // In-memory cache of parsed OSM elements per tile
     private final ConcurrentHashMap<String, List<OSMElement>> tileCache = new ConcurrentHashMap<>();
@@ -41,15 +46,25 @@ public class OSMCache {
     private final Set<String> fetchingTiles = ConcurrentHashMap.newKeySet();
 
     public OSMCache(Path cacheDir, Logger logger) {
+        this(cacheDir, logger, null, null);
+    }
+
+    public OSMCache(Path cacheDir, Logger logger, OverpassFetcher overpassFetcher, ExecutorService executor) {
         this.cacheDir = cacheDir;
         this.logger = logger;
+        this.overpassFetcher = overpassFetcher;
+        this.fetchExecutor = executor != null ? executor : Executors.newFixedThreadPool(3, r -> {
+            Thread t = new Thread(r);
+            t.setDaemon(true);
+            t.setName("OSM-Fetch-" + t.threadId());
+            return t;
+        });
         try { Files.createDirectories(cacheDir); } catch (IOException ignored) {}
     }
 
     /**
      * Get all OSM elements that intersect with the given lat/lng bounding box.
-     * Returns immediately with cached data, or empty list if not yet fetched.
-     * Triggers async fetch for uncached tiles.
+     * Fetches synchronously on cache miss so chunk generation includes buildings/roads.
      */
     public List<OSMElement> getElements(double minLat, double minLng, double maxLat, double maxLng) {
         List<OSMElement> result = new ArrayList<>();
@@ -67,13 +82,60 @@ public class OSMCache {
                 if (cached != null) {
                     result.addAll(cached);
                 } else {
-                    // Trigger background fetch
-                    triggerFetch(tx, tz);
+                    // Synchronous fetch — blocks until data is available
+                    List<OSMElement> fetched = fetchSync(tx, tz);
+                    result.addAll(fetched);
                 }
             }
         }
 
         return result;
+    }
+
+    /**
+     * Synchronous fetch for chunk generation — ensures buildings/roads appear on first visit.
+     */
+    private List<OSMElement> fetchSync(int tileX, int tileZ) {
+        String key = tileX + "_" + tileZ;
+
+        // Check disk cache first
+        Path cacheFile = cacheDir.resolve("osm_" + key + ".json");
+        if (Files.exists(cacheFile)) {
+            try {
+                List<OSMElement> elements = parseOSMFile(cacheFile);
+                tileCache.put(key, elements);
+                return elements;
+            } catch (Exception e) {
+                logger.warning("Failed to read cached OSM: " + e.getMessage());
+            }
+        }
+
+        // Fetch from Overpass API synchronously
+        try {
+            double minLat = tileZ * TILE_SIZE_DEG;
+            double minLng = tileX * TILE_SIZE_DEG;
+            double maxLat = minLat + TILE_SIZE_DEG;
+            double maxLng = minLng + TILE_SIZE_DEG;
+
+            String query = buildOverpassQuery(minLat, minLng, maxLat, maxLng);
+            String response = overpassFetcher != null
+                ? overpassFetcher.fetch(query)
+                : fetchOverpass(query);
+
+            if (response != null) {
+                Files.writeString(cacheFile, response, StandardCharsets.UTF_8);
+                List<OSMElement> elements = parseOSMResponse(response);
+                tileCache.put(key, elements);
+                logger.info("Fetched OSM tile " + key + ": " + elements.size() + " elements");
+                return elements;
+            }
+        } catch (Exception e) {
+            logger.warning("OSM sync fetch failed for tile " + key + ": " + e.getMessage());
+        }
+
+        List<OSMElement> empty = Collections.emptyList();
+        tileCache.put(key, empty);
+        return empty;
     }
 
     private void triggerFetch(int tileX, int tileZ) {
@@ -94,8 +156,8 @@ public class OSMCache {
             }
         }
 
-        // Fetch from Overpass API in background
-        Thread fetcher = new Thread(() -> {
+        // Fetch from Overpass API in background via bounded thread pool
+        fetchExecutor.submit(() -> {
             try {
                 double minLat = tileZ * TILE_SIZE_DEG;
                 double minLng = tileX * TILE_SIZE_DEG;
@@ -103,7 +165,9 @@ public class OSMCache {
                 double maxLng = minLng + TILE_SIZE_DEG;
 
                 String query = buildOverpassQuery(minLat, minLng, maxLat, maxLng);
-                String response = fetchOverpass(query);
+                String response = overpassFetcher != null
+                    ? overpassFetcher.fetch(query)
+                    : fetchOverpass(query);
 
                 if (response != null) {
                     Files.writeString(cacheFile, response, StandardCharsets.UTF_8);
@@ -120,12 +184,25 @@ public class OSMCache {
                 fetchingTiles.remove(key);
             }
         });
-        fetcher.setDaemon(true);
-        fetcher.setName("OSM-Fetch-" + key);
-        fetcher.start();
     }
 
-    private String buildOverpassQuery(double minLat, double minLng, double maxLat, double maxLng) {
+    /**
+     * Shut down the fetch thread pool. Call from plugin onDisable().
+     */
+    public void shutdown() {
+        fetchExecutor.shutdown();
+        try {
+            if (!fetchExecutor.awaitTermination(5, TimeUnit.SECONDS)) {
+                fetchExecutor.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            fetchExecutor.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    // Package-private for testing
+    String buildOverpassQuery(double minLat, double minLng, double maxLat, double maxLng) {
         String bbox = minLat + "," + minLng + "," + maxLat + "," + maxLng;
         return "[out:json][timeout:30];\n" +
             "(\n" +
@@ -178,7 +255,8 @@ public class OSMCache {
         return parseOSMResponse(Files.readString(file));
     }
 
-    private List<OSMElement> parseOSMResponse(String json) {
+    // Package-private for testing
+    List<OSMElement> parseOSMResponse(String json) {
         List<OSMElement> elements = new ArrayList<>();
         Map<Long, double[]> nodeMap = new HashMap<>();
 

@@ -24,6 +24,16 @@ dependencies {
     compileOnly("com.fastasyncworldedit:FastAsyncWorldEdit-Bukkit:2.15.0") { isTransitive = false }
     implementation("com.github.Querz:NBT:6.1")
     implementation("com.google.code.gson:gson:2.11.0")
+
+    // Testing
+    testImplementation("org.junit.jupiter:junit-jupiter:5.11.0")
+    testImplementation("org.mockito:mockito-core:5.14.0")
+    testImplementation("org.mockito:mockito-junit-jupiter:5.14.0")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+}
+
+tasks.test {
+    useJUnitPlatform()
 }
 
 tasks.jar {
